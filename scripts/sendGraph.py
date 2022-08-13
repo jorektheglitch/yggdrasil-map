@@ -8,10 +8,22 @@
 #    www.fc00.org              for clearnet access
 #    h.fc00.org                for hyperboria
 #    [fc53:dcc5:e89d:9082:4097:6622:5e82:c654] for DNS-less access
-url = 'http://www.fc00.org/sendGraph'
+import threading
+import queue
+from cjdns import admin_tools
+from cjdns import key_utils
+import cjdns
+import requests
+import argparse
+import json
+import traceback
+import sys
+
+
+URL = 'http://www.fc00.org/sendGraph'
 
 # update your email address, so I can contact you in case something goes wrong
-your_mail = 'your@email.here'
+YOUR_EMAIL = 'your@email.here'
 
 
 # ----------------------
@@ -22,30 +34,22 @@ your_mail = 'your@email.here'
 cjdns_use_default = True
 
 # otherwise these are used.
-cjdns_ip     = '127.0.0.1'
-cjdns_port       = 11234
-cjdns_password   = 'NONE'
+cjdns_ip = '127.0.0.1'
+cjdns_port = 11234
+cjdns_password = 'NONE'
 
 ###############################################################################
 
-import sys
-import traceback
-import json
-import argparse
-
-import requests
-
-import cjdns
-from cjdns import key_utils
-from cjdns import admin_tools
-
-import queue
-import threading
 
 def main():
-    parser = argparse.ArgumentParser(description='Submit nodes and links to fc00')
-    parser.add_argument('-v', '--verbose', help='increase output verbosity',
-                        dest='verbose', action='store_true')
+    parser = argparse.ArgumentParser(
+        description='Submit nodes and links to fc00'
+    )
+    parser.add_argument(
+        '-v', '--verbose',
+        help='increase output verbosity',
+        dest='verbose', action='store_true'
+    )
     parser.set_defaults(verbose=False)
     args = parser.parse_args()
 
@@ -61,8 +65,10 @@ def main():
         get_peer_queue.put(k)
 
     for i in range(8):
-        t = threading.Thread(target=worker, args=[nodes, get_peer_queue, result_queue,
-                                                  args.verbose])
+        t = threading.Thread(
+            target=worker,
+            args=[nodes, get_peer_queue, result_queue, args.verbose]
+        )
         t.daemon = True
         t.start()
 
@@ -72,6 +78,7 @@ def main():
 
     send_graph(nodes, edges)
     sys.exit(0)
+
 
 def worker(nodes, get_peer_queue, result, verbose=False):
     con = connect()
@@ -90,6 +97,7 @@ def worker(nodes, get_peer_queue, result, verbose=False):
         peers = get_all_peers(con, node['path'])
 
         result.put((peers, node_ip))
+
 
 def connect():
     try:
@@ -129,7 +137,8 @@ def dump_node_store(con):
             if 'version' in n:
                 version = n['version']
 
-            nodes[ip] = {'ip': ip, 'path': path, 'addr': addr, 'version': version}
+            nodes[ip] = {'ip': ip, 'path': path,
+                         'addr': addr, 'version': version}
 
         if not 'more' in res or res['more'] != 1:
             break
@@ -151,7 +160,6 @@ def get_peers(con, path, nearbyPath=''):
             res = con.RouterModule_getPeers(path, nearbyPath=nearbyPath)
         else:
             res = con.RouterModule_getPeers(path)
-
 
         if res['error'] == 'not_found':
             print('get_peers: node with path {:s} not found, skipping.'
@@ -218,8 +226,8 @@ def get_edges_for_peers(edges, peers, node_ip):
         A = max(node_ip, peer_ip)
         B = min(node_ip, peer_ip)
 
-        edge = { 'a': A,
-                 'b': B }
+        edge = {'a': A,
+                'b': B}
 
         if A not in edges:
             edges[A] = []
@@ -232,7 +240,7 @@ def send_graph(nodes, edges):
     graph = {
         'nodes': [],
         'edges': [edge for sublist in edges.values()
-                   for edge    in sublist],
+                  for edge in sublist],
     }
 
     for node in nodes.values():
@@ -244,15 +252,16 @@ def send_graph(nodes, edges):
     print('Nodes: {:d}\nEdges: {:d}\n'.format(len(nodes), len(edges)))
 
     json_graph = json.dumps(graph)
-    print('Sending data to {:s}...'.format(url))
+    print('Sending data to {:s}...'.format(URL))
 
-    payload = {'data': json_graph, 'mail': your_mail, 'version': 2}
-    r = requests.post(url, data=payload)
+    payload = {'data': json_graph, 'mail': YOUR_EMAIL, 'version': 2}
+    r = requests.post(URL, data=payload)
 
     if r.text == 'OK':
         print('Done!')
     else:
         print('{:s}'.format(r.text))
+
 
 if __name__ == '__main__':
     main()
