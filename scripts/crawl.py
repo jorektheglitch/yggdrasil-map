@@ -13,6 +13,15 @@ if sys.version_info >= (3, 8):
 else:
     from typing_extensions import Literal, TypedDict
 
+
+class RequestFailed(Exception):
+    pass
+
+
+class TimeoutExceed(RequestFailed):
+    pass
+
+
 # gives the option to get data from an external server instead and send that
 # if no options given it will default to localhost instead
 SOCKADDR: Union[Tuple[str, int], str]
@@ -103,11 +112,11 @@ def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
         ygg = socket.socket(SOCKTYPE, socket.SOCK_STREAM)
         ygg.connect(SOCKADDR)
         ygg.send(request)
-        data = json.loads(ygg.recv(1024*15))
-        response = data.get("response")
-    except Exception:
-        response = None
-    return response
+        raw = ygg.recv(1024**2)
+    except OSError as e:
+        raise RequestFailed from e
+    data = json.loads(raw)
+    return data.get("response")
 
 
 visited: Set[NodeKey] = set()  # Add nodes after a successful lookup response
