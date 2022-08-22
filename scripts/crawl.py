@@ -40,6 +40,12 @@ NodeAddr = NewType("NodeAddr", str)
 NodeKey = NewType("NodeKey", str)
 
 
+class RawAPIResponse(TypedDict):
+    status: Literal["success", "error"]
+    request: Dict
+    response: Dict
+
+
 class SelfResponse(TypedDict):
     self: Dict[NodeAddr, NodeInfo]
 
@@ -115,7 +121,7 @@ def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
         raw = ygg.recv(1024**2)
     except OSError as e:
         raise RequestFailed from e
-    data = json.loads(raw)
+    data: RawAPIResponse = json.loads(raw)
     return data.get("response")
 
 
