@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 import socket
 import sys
-import time
+from datetime import datetime as dt
+from datetime import timezone as tz
+from itertools import chain
+from queue import Queue
 
 from typing import Any, Union
 from typing import Callable, Dict, List, Set, Tuple
@@ -48,11 +51,8 @@ class RawAPIResponse(TypedDict):
     response: Dict
 
 
-class SelfResponse(TypedDict):
-    self: Dict[NodeAddr, NodeInfo]
-
-
-class NodeInfo(TypedDict):
+class SelfInfo(TypedDict):
+    address: NodeAddr
     build_name: str
     build_version: str
     coords: List[int]
@@ -65,47 +65,43 @@ class RemoteSelfInfo(TypedDict):
     key: NodeKey
 
 
-class RemotePeers(TypedDict):
-    keys: List[NodeKey]
-
-
-class RemoteDHT(TypedDict):
+class KeysDict(TypedDict):
     keys: List[NodeKey]
 
 
 class NodeSummary(TypedDict):
     address: NodeAddr
     coords: List[int]
-    nodeinfo: NodeInfo
+    nodeinfo: Dict
     peers: List[NodeKey]
     dht: List[NodeKey]
-    time: float
+    time: Union[dt, float]
 
 
 @overload
 def doRequest(
     endpoint: Literal["getSelf"], keepalive: bool = True
-) -> SelfResponse: ...
+) -> SelfInfo: ...
 @overload  # noqa
 def doRequest(
     endpoint: Literal["getNodeInfo"], keepalive: bool = True,
     *, key: NodeKey
-) -> Dict[NodeAddr, NodeInfo]: ...
+) -> Tuple[NodeAddr, Any]: ...
 @overload  # noqa
 def doRequest(
     endpoint: Literal["debug_remoteGetSelf"], keepalive: bool = True,
     *, key: NodeKey
-) -> Dict[NodeAddr, RemoteSelfInfo]: ...
+) -> RemoteSelfInfo: ...
 @overload  # noqa
 def doRequest(
     endpoint: Literal["debug_remoteGetPeers"], keepalive: bool = True,
     *, key: NodeKey
-) -> Dict[NodeAddr, RemotePeers]: ...
+) -> List[NodeKey]: ...
 @overload  # noqa
 def doRequest(
     endpoint: Literal["debug_remoteGetDHT"], keepalive: bool = True,
     *, key: NodeKey
-) -> Dict[NodeAddr, RemoteDHT]: ...
+) -> List[NodeKey]: ...
 
 def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
     response = None
@@ -124,62 +120,20 @@ def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
     except OSError as e:
         raise RequestFailed from e
     data: RawAPIResponse = json.loads(raw)
-    return data.get("response")
-
-
-visited: Set[NodeKey] = set()  # Add nodes after a successful lookup response
-rumored: Set[NodeKey] = set()  # Add rumors about nodes to ping
-timedout: Set = set()
-
-
-def handleNodeInfoResponse(publicKey: NodeKey, info: Dict[NodeAddr, NodeInfo]):
-    global visited
-    global rumored
-    global timedout
-    if publicKey in visited:
-        return
-    if not info:
-        return
-    out: NodeSummary = dict()
-    for addr, details in info.items():
-        out['address'] = addr
-        out['nodeinfo'] = details
-    selfInfo = doRequest("debug_remoteGetSelf", key=publicKey)
-    if selfInfo is not None:
-        for node_info in selfInfo.values():
-            if 'coords' in node_info:
-                out['coords'] = node_info['coords']
-    peerInfo = doRequest("debug_remoteGetPeers", key=publicKey)
-    if peerInfo is not None:
-        for v in peerInfo.values():
-            if 'keys' not in v:
-                continue
-            peers = v['keys']
-            for key in peers:
-                if key in visited:
-                    continue
-                if key in timedout:
-                    continue
-                rumored.add(key)
-            out['peers'] = peers
-    dhtInfo = doRequest("debug_remoteGetDHT", key=publicKey)
-    if dhtInfo is not None:
-        for v in dhtInfo.values():
-            if 'keys' in v:
-                dht = v['keys']
-                for key in dht:
-                    if key in visited:
-                        continue
-                    if key in timedout:
-                        continue
-                    rumored.add(key)
-                out['dht'] = dht
-    out['time'] = time.time()
-    if len(visited) > 0:
-        sys.stdout.write(",\n")
-    sys.stdout.write('"{}": {}'.format(publicKey, json.dumps(out)))
-    sys.stdout.flush()
-    visited.add(publicKey)
+    status = data["status"]
+    response = data["response"]
+    if status == "error":
+        if keepalive:
+            params["keepalive"] = keepalive
+        params_repr = ", ".join(f"{k}={repr(v)}" for k, v in params.items())
+        request_repr = f"{endpoint}({params_repr})"
+        if response["error"] == "timeout":
+            raise TimeoutError(f"{request_repr} timed out.")
+        raise RequestFailed(f"{request_repr} request failed. {response['error']}.")
+    postprocessor = RESPONSE_POSTPROCESS.get(endpoint)
+    if postprocessor is not None:
+        response = postprocessor(response)
+    return response
 
 
 # Bunch of API response postprocessing functions
@@ -214,29 +168,49 @@ RESPONSE_POSTPROCESS: Dict[str, Callable[[dict], Any]] = {
 }
 
 
-# Get self info
-selfInfo = doRequest("getSelf")
-if selfInfo:
-    for self_info in selfInfo['self'].values():
-        rumored.add(self_info['key'])
-
-# Initialize dicts of visited/rumored nodes
-# for k,v in selfInfo['self'].iteritems(): rumored[k] = v
-
-# Loop over rumored nodes and ping them, adding to visited if they respond
-print('{"yggnodes": {')
-while len(rumored) > 0:
-    for k in rumored:
-        nodeinfo = doRequest("getNodeInfo", key=k)
-        if not nodeinfo:
+def crawl() -> Dict[NodeKey, NodeSummary]:
+    known: Set[NodeKey] = set()
+    visited: Dict[NodeKey, NodeSummary] = {}
+    queue: Queue[NodeKey] = Queue()
+    self_info = doRequest("getSelf")
+    queue.put(self_info['key'])
+    while not queue.empty():
+        pubkey = queue.get()
+        known.add(pubkey)
+        if pubkey in visited:
             continue
-        handleNodeInfoResponse(k, nodeinfo)
-        break
-    rumored.remove(k)
-print('\n}}')
-# End
+        try:
+            addr, nodeinfo = doRequest("getNodeInfo", key=pubkey)
+            details = doRequest("debug_remoteGetSelf", key=pubkey)
+            peers = doRequest("debug_remoteGetPeers", key=pubkey)
+            dht = doRequest("debug_remoteGetDHT", key=pubkey)
+            time_raw = dt.now(tz=tz.utc)
+            time = time_raw.astimezone()
+        except RequestFailed as e:
+            print(f"{type(e).__name__}: {e}")
+            visited[pubkey] = {"time": time, "error": type(e).__name__}  # type: ignore  # noqa
+            continue
+        coords = details["coords"]
+        visited[pubkey] = NodeSummary(
+            address=addr, coords=coords,
+            nodeinfo=nodeinfo, peers=peers, dht=dht,
+            time=time
+        )
+        for key in chain(peers, dht):
+            if key not in known:
+                queue.put(key)
+            known.add(key)
+    return visited
 
-# TODO do something with the results
 
-# print visited
-# print timedout
+class MapEncoder(json.JSONEncoder):
+
+    def default(self, o: Any) -> Any:
+        if isinstance(o, dt):
+            return o.isoformat()
+        return super().default(o)
+
+
+network_map = crawl()
+json.dump(network_map, sys.stdout, indent=2, cls=MapEncoder)
+sys.stdout.flush()
