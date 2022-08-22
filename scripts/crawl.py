@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
+
+from __future__ import annotations
+
 import json
 import socket
 import sys
 import time
+
+from typing import Dict, List, NewType, Optional, Set, Tuple, Union, overload
+if sys.version_info >= (3, 8):
+    from typing import Literal, TypedDict
+else:
+    from typing_extensions import Literal, TypedDict
 
 # gives the option to get data from an external server instead and send that
 # if no options given it will default to localhost instead
@@ -19,6 +28,44 @@ else:
 
 def getNodeInfoRequest(key):
     return '{{"keepalive":true, "request":"getNodeInfo", "key":"{}"}}'.format(key)
+
+
+NodeAddr = NewType("NodeAddr", str)
+NodeKey = NewType("NodeKey", str)
+
+
+class SelfResponse(TypedDict):
+    self: Dict[NodeAddr, NodeInfo]
+
+
+class NodeInfo(TypedDict):
+    build_name: str
+    build_version: str
+    coords: List[int]
+    key: NodeKey
+    subnet: str
+
+
+class RemoteSelfInfo(TypedDict):
+    coords: str
+    key: NodeKey
+
+
+class RemotePeers(TypedDict):
+    keys: List[NodeKey]
+
+
+class RemoteDHT(TypedDict):
+    keys: List[NodeKey]
+
+
+class NodeSummary(TypedDict):
+    address: NodeAddr
+    coords: List[int]
+    nodeinfo: NodeInfo
+    peers: List[NodeKey]
+    dht: List[NodeKey]
+    time: float
 
 
 def getSelfRequest(key):
@@ -44,9 +91,9 @@ def doRequest(req):
         return None
 
 
-visited = set()  # Add nodes after a successful lookup response
-rumored = set()  # Add rumors about nodes to ping
-timedout = set()
+visited: Set[NodeKey] = set()  # Add nodes after a successful lookup response
+rumored: Set[NodeKey] = set()  # Add rumors about nodes to ping
+timedout: Set = set()
 
 
 def handleNodeInfoResponse(publicKey, data):
