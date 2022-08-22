@@ -7,7 +7,9 @@ import socket
 import sys
 import time
 
-from typing import Dict, List, NewType, Optional, Set, Tuple, Union, overload
+from typing import Any, Union
+from typing import Callable, Dict, List, Set, Tuple
+from typing import NewType, overload
 if sys.version_info >= (3, 8):
     from typing import Literal, TypedDict
 else:
@@ -178,6 +180,38 @@ def handleNodeInfoResponse(publicKey: NodeKey, info: Dict[NodeAddr, NodeInfo]):
     sys.stdout.write('"{}": {}'.format(publicKey, json.dumps(out)))
     sys.stdout.flush()
     visited.add(publicKey)
+
+
+# Bunch of API response postprocessing functions
+
+def process_getself(response: Dict) -> SelfInfo:
+    addr, info = response.popitem()
+    info["address"] = addr
+    return info
+
+
+def process_getnodeinfo(response: Dict) -> Tuple[NodeAddr, Any]:
+    addr, nodeinfo = response.popitem()
+    return addr, nodeinfo
+
+
+def crutch(response: Dict) -> Any:
+    _, value = response.popitem()
+    return value
+
+
+def cruth_for_keys(response: Dict[Any, KeysDict]) -> List[NodeKey]:
+    _, keys_mapping = response.popitem()
+    return keys_mapping.get("keys", [])
+
+
+RESPONSE_POSTPROCESS: Dict[str, Callable[[dict], Any]] = {
+    "getSelf": process_getself,
+    "getNodeInfo": process_getnodeinfo,
+    "debug_remoteGetSelf": crutch,
+    "debug_remoteGetPeers": cruth_for_keys,
+    "debug_remoteGetDHT": cruth_for_keys
+}
 
 
 # Get self info
