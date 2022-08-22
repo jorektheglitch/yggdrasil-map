@@ -15,15 +15,16 @@ else:
 
 # gives the option to get data from an external server instead and send that
 # if no options given it will default to localhost instead
+SOCKADDR: Union[Tuple[str, int], str]
 if len(sys.argv) == 3:
-    socktype = socket.AF_INET
-    sockaddr = (sys.argv[1], int(sys.argv[2]))
+    SOCKTYPE = socket.AF_INET
+    SOCKADDR = (sys.argv[1], int(sys.argv[2]))
 elif len(sys.argv) == 2:
-    socktype = socket.AF_UNIX
-    sockaddr = sys.argv[1]
+    SOCKTYPE = socket.AF_UNIX
+    SOCKADDR = sys.argv[1]
 else:
-    socktype = socket.AF_UNIX
-    sockaddr = "/var/run/yggdrasil.sock"
+    SOCKTYPE = socket.AF_UNIX
+    SOCKADDR = "/var/run/yggdrasil.sock"
 
 
 def getNodeInfoRequest(key):
@@ -82,8 +83,8 @@ def getDHTRequest(key):
 
 def doRequest(req):
     try:
-        ygg = socket.socket(socktype, socket.SOCK_STREAM)
-        ygg.connect(sockaddr)
+        ygg = socket.socket(SOCKTYPE, socket.SOCK_STREAM)
+        ygg.connect(SOCKADDR)
         ygg.send(req)
         data = json.loads(ygg.recv(1024*15))
         return data
