@@ -65,8 +65,30 @@ class NodeSummary(TypedDict):
     time: float
 
 
-def getSelfRequest(key):
-    return '{{"keepalive":true, "request":"debug_remoteGetSelf", "key":"{}"}}'.format(key)
+@overload
+def doRequest(
+    endpoint: Literal["getSelf"], keepalive: bool = True
+) -> Optional[SelfResponse]: ...
+@overload  # noqa
+def doRequest(
+    endpoint: Literal["getNodeInfo"], keepalive: bool = True,
+    *, key: NodeKey
+) -> Optional[Dict[NodeAddr, NodeInfo]]: ...
+@overload  # noqa
+def doRequest(
+    endpoint: Literal["debug_remoteGetSelf"], keepalive: bool = True,
+    *, key: NodeKey
+) -> Optional[Dict[NodeAddr, RemoteSelfInfo]]: ...
+@overload  # noqa
+def doRequest(
+    endpoint: Literal["debug_remoteGetPeers"], keepalive: bool = True,
+    *, key: NodeKey
+) -> Optional[Dict[NodeAddr, RemotePeers]]: ...
+@overload  # noqa
+def doRequest(
+    endpoint: Literal["debug_remoteGetDHT"], keepalive: bool = True,
+    *, key: NodeKey
+) -> Optional[Dict[NodeAddr, RemoteDHT]]: ...
 
 def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
     response = None
