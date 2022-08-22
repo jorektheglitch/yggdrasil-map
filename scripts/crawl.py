@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import json
 import socket
 import sys
@@ -110,13 +111,13 @@ for k, v in selfInfo['response']['self'].iteritems():
 #for k,v in selfInfo['response']['self'].iteritems(): rumored[k] = v
 
 # Loop over rumored nodes and ping them, adding to visited if they respond
-print '{"yggnodes": {'
+print('{"yggnodes": {')
 while len(rumored) > 0:
     for k in rumored:
         handleNodeInfoResponse(k, doRequest(getNodeInfoRequest(k)))
         break
     rumored.remove(k)
-print '\n}}'
+print('\n}}')
 # End
 
 # TODO do something with the results
