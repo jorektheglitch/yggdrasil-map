@@ -187,7 +187,6 @@ def crawl() -> Dict[NodeKey, NodeSummary]:
             time_raw = dt.now(tz=tz.utc)
             time = time_raw.astimezone()
         except RequestFailed as e:
-            print(f"{type(e).__name__}: {e}")
             visited[pubkey] = {"time": time, "error": type(e).__name__}  # type: ignore  # noqa
             continue
         coords = details["coords"]
