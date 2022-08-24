@@ -7,7 +7,6 @@ import socket
 import sys
 from datetime import datetime as dt
 from datetime import timezone as tz
-from itertools import chain
 from queue import Queue
 
 from typing import Any, Union
@@ -173,6 +172,28 @@ RESPONSE_POSTPROCESS: Dict[str, Callable[[dict], Any]] = {
 }
 
 
+def visit(key: NodeKey) -> Tuple[NodeSummary, Set[NodeKey]]:
+    try:
+        addr, nodeinfo = doRequest("getNodeInfo", key=key)
+        details = doRequest("debug_remoteGetSelf", key=key)
+        peers = doRequest("debug_remoteGetPeers", key=key)
+        dht = doRequest("debug_remoteGetDHT", key=key)
+        time_raw = dt.now(tz=tz.utc)
+        time = time_raw.astimezone()
+    except RequestFailed as e:
+        return {"time": time, "error": type(e).__name__}, []  # type: ignore
+    coords_repr = details["coords"]
+    coords_repr = coords_repr.strip("[]")  # cuts off brackets
+    coords = [int(port) for port in coords_repr.split() if port]
+    summary = NodeSummary(
+        address=addr, coords=coords,
+        nodeinfo=nodeinfo, peers=peers, dht=dht,
+        time=time
+    )
+    node_seen = {*peers, *dht}
+    return summary, node_seen
+
+
 def crawl() -> Dict[NodeKey, NodeSummary]:
     known: Set[NodeKey] = set()
     visited: Dict[NodeKey, NodeSummary] = {}
@@ -184,25 +205,11 @@ def crawl() -> Dict[NodeKey, NodeSummary]:
         known.add(pubkey)
         if pubkey in visited:
             continue
-        try:
-            addr, nodeinfo = doRequest("getNodeInfo", key=pubkey)
-            details = doRequest("debug_remoteGetSelf", key=pubkey)
-            peers = doRequest("debug_remoteGetPeers", key=pubkey)
-            dht = doRequest("debug_remoteGetDHT", key=pubkey)
-            time_raw = dt.now(tz=tz.utc)
-            time = time_raw.astimezone()
-        except RequestFailed as e:
-            visited[pubkey] = {"time": time, "error": type(e).__name__}  # type: ignore  # noqa
-            continue
-        coords = details["coords"]
-        visited[pubkey] = NodeSummary(
-            address=addr, coords=coords,
-            nodeinfo=nodeinfo, peers=peers, dht=dht,
-            time=time
-        )
-        for key in chain(peers, dht):
-            if key not in known:
-                queue.put(key)
+        node_summary, newly_known = visit(pubkey)
+        visited[pubkey] = node_summary
+        newly_known -= known
+        for key in newly_known:
+            queue.put(key)
             known.add(key)
     return visited
 
