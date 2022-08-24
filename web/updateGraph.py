@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import graphPlotter
 import cgi
 
@@ -67,7 +67,7 @@ def generate_graph(time_limit=60*60*3):
       if node.coords == node.getParent: continue
       edges.append(LinkInfo(node, nodes[node.getParent()]))
 
-    print '%d nodes, %d edges' % (len(nodes), len(edges))
+    print('%d nodes, %d edges' % (len(nodes), len(edges)))
 
     graph = graphPlotter.position_nodes(nodes, edges)
     js = graphPlotter.get_graph_json(graph)

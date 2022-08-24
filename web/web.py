@@ -34,7 +34,7 @@ def page_about():
 
 @app.route('/sendGraph', methods=['POST'])
 def page_sendGraph():
-    print "Receiving graph from %s" % (request.remote_addr)
+    print("Receiving graph from %s" % (request.remote_addr))
     
     data = request.form['data']
     mail = request.form.get('mail', 'none')
