@@ -2,7 +2,7 @@
 
 import cgi
 import json
-import urllib
+import urllib.request
 
 import graphPlotter
 
@@ -43,8 +43,8 @@ class LinkInfo:
 
 
 def generate_graph(time_limit=60*60*3):
-    response = urllib.urlopen(url)
-    data = json.loads(response.read())["yggnodes"]
+    with urllib.request.urlopen(url) as response:
+        data = json.loads(response.read())["yggnodes"]
 
     toAdd = []
     for key in data:
