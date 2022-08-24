@@ -140,23 +140,28 @@ def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
 
 def process_getself(response: Dict) -> SelfInfo:
     addr, info = response.popitem()
+    assert not response  # check that there was exactly one record in dict
     info["address"] = addr
     return info
 
 
 def process_getnodeinfo(response: Dict) -> Tuple[NodeAddr, Any]:
     addr, nodeinfo = response.popitem()
+    assert not response  # check that there was exactly one record in dict
     return addr, nodeinfo
 
 
 def crutch(response: Dict) -> Any:
     _, value = response.popitem()
+    assert not response  # check that there was exactly one record in dict
     return value
 
 
 def cruth_for_keys(response: Dict[Any, KeysDict]) -> List[NodeKey]:
     _, keys_mapping = response.popitem()
-    return keys_mapping.get("keys", [])
+    assert not response  # check that there was exactly one record in dict
+    keys = keys_mapping.get("keys", [])
+    return keys
 
 
 RESPONSE_POSTPROCESS: Dict[str, Callable[[dict], Any]] = {
