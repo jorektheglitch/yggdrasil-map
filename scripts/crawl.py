@@ -79,36 +79,30 @@ class NodeSummary(TypedDict):
 
 
 @overload
-async def doRequest(
-    endpoint: Literal["getSelf"], keepalive: bool = True
-) -> SelfInfo: ...
+async def doRequest(endpoint: Literal["getSelf"]) -> SelfInfo: ...
 @overload  # noqa
 async def doRequest(
-    endpoint: Literal["getNodeInfo"], keepalive: bool = True,
-    *, key: NodeKey
+    endpoint: Literal["getNodeInfo"], *, key: NodeKey
 ) -> Tuple[NodeAddr, Any]: ...
 @overload  # noqa
 async def doRequest(
-    endpoint: Literal["debug_remoteGetSelf"], keepalive: bool = True,
-    *, key: NodeKey
+    endpoint: Literal["debug_remoteGetSelf"], *, key: NodeKey
 ) -> RemoteSelfInfo: ...
 @overload  # noqa
 async def doRequest(
-    endpoint: Literal["debug_remoteGetPeers"], keepalive: bool = True,
-    *, key: NodeKey
+    endpoint: Literal["debug_remoteGetPeers"], *, key: NodeKey
 ) -> List[NodeKey]: ...
 @overload  # noqa
 async def doRequest(
-    endpoint: Literal["debug_remoteGetDHT"], keepalive: bool = True,
-    *, key: NodeKey
+    endpoint: Literal["debug_remoteGetDHT"], *, key: NodeKey
 ) -> List[NodeKey]: ...
 
-async def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
+async def doRequest(endpoint: str, **params):  # noqa
     response = None
     request_body = {
         "request": endpoint,
-        "keepalive": keepalive,
-        **params
+        **params,
+        "keepalive": False
     }
     request_repr = json.dumps(request_body)
     request = request_repr.encode("utf-8")
@@ -124,8 +118,6 @@ async def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
     status = data["status"]
     response = data["response"]
     if status == "error":
-        if keepalive:
-            params["keepalive"] = keepalive
         params_repr = ", ".join(f"{k}={repr(v)}" for k, v in params.items())
         request_repr = f"{endpoint}({params_repr})"
         if response["error"] == "timeout":
