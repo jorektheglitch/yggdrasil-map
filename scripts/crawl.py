@@ -182,7 +182,7 @@ async def visit(key: NodeKey) -> Tuple[NodeSummary, Set[NodeKey]]:
     except RequestFailed as e:
         time_raw = dt.now(tz=tz.utc)
         time = time_raw.astimezone()
-        return {"time": time, "error": type(e).__name__}, []  # type: ignore
+        return {"time": time, "error": type(e).__name__}, set()  # type: ignore
     time_raw = dt.now(tz=tz.utc)
     time = time_raw.astimezone()
     coords_repr = details["coords"]
