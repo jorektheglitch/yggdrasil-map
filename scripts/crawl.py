@@ -203,16 +203,21 @@ async def crawl() -> Dict[NodeKey, NodeSummary]:
     self_info = await doRequest("getSelf")
     queue.put(self_info['key'])
     while not queue.empty():
-        pubkey = queue.get()
-        known.add(pubkey)
-        if pubkey in visited:
-            continue
-        node_summary, newly_known = await visit(pubkey)
-        visited[pubkey] = node_summary
-        newly_known -= known
-        for key in newly_known:
-            queue.put(key)
-            known.add(key)
+        planned_keys = []
+        while not queue.empty():
+            pubkey = queue.get()
+            known.add(pubkey)
+            if pubkey in visited:
+                continue
+            planned_keys.append(pubkey)
+        planned = (visit(pubkey) for pubkey in planned_keys)
+        results = await asyncio.gather(*planned)
+        for node_summary, newly_known in results:
+            visited[pubkey] = node_summary
+            newly_known -= known
+            for key in newly_known:
+                queue.put(key)
+                known.add(key)
     return visited
 
 
