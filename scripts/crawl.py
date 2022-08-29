@@ -132,8 +132,9 @@ async def doRequest(endpoint: str, **params):  # noqa
 # Bunch of API response postprocessing functions
 
 def process_getself(response: Dict) -> SelfInfo:
-    addr, info = response.popitem()
-    assert not response  # check that there was exactly one record in dict
+    self_info = response["self"]
+    addr, info = self_info.popitem()
+    assert not self_info  # check that there was exactly one record in dict
     info["address"] = addr
     return info
 
@@ -222,6 +223,10 @@ class MapEncoder(json.JSONEncoder):
 
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        from asyncio import WindowsProactorEventLoopPolicy
+        windows_policy = WindowsProactorEventLoopPolicy()
+        asyncio.set_event_loop_policy(windows_policy)
     network_map = asyncio.run(crawl())
     json.dump(network_map, sys.stdout, indent=2, cls=MapEncoder)
     sys.stdout.flush()
