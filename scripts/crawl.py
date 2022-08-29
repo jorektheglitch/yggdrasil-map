@@ -224,6 +224,7 @@ class MapEncoder(json.JSONEncoder):
         return super().default(o)
 
 
-network_map = asyncio.run(crawl())
-json.dump(network_map, sys.stdout, indent=2, cls=MapEncoder)
-sys.stdout.flush()
+if __name__ == "__main__":
+    network_map = asyncio.run(crawl())
+    json.dump(network_map, sys.stdout, indent=2, cls=MapEncoder)
+    sys.stdout.flush()
