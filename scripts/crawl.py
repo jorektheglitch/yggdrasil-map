@@ -175,8 +175,9 @@ async def visit(key: NodeKey) -> Tuple[NodeSummary, Set[NodeKey]]:
         dht = await doRequest("debug_remoteGetDHT", key=key)
         time_raw = dt.now(tz=tz.utc)
         time = time_raw.astimezone()
-    except RequestFailed as e:
         return {"time": time, "error": type(e).__name__}, []  # type: ignore
+    time_raw = dt.now(tz=tz.utc)
+    time = time_raw.astimezone()
     coords_repr = details["coords"]
     coords_repr = coords_repr.strip("[]")  # cuts off brackets
     coords = [int(port) for port in coords_repr.split() if port]
