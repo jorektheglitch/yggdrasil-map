@@ -124,7 +124,7 @@ async def doRequest(endpoint: str, **params):  # noqa
         params_repr = ", ".join(f"{k}={repr(v)}" for k, v in params.items())
         request_repr = f"{endpoint}({params_repr})"
         if response["error"] == "timeout":
-            raise TimeoutError(f"{request_repr} timed out.")
+            raise TimeoutExceed(f"{request_repr} timed out.")
         raise RequestFailed(f"{request_repr} request failed. {response['error']}.")
     postprocessor = RESPONSE_POSTPROCESS.get(endpoint)
     if postprocessor is not None:
