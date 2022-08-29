@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
+import asyncio
 
 import json
 import socket
@@ -78,31 +79,31 @@ class NodeSummary(TypedDict):
 
 
 @overload
-def doRequest(
+async def doRequest(
     endpoint: Literal["getSelf"], keepalive: bool = True
 ) -> SelfInfo: ...
 @overload  # noqa
-def doRequest(
+async def doRequest(
     endpoint: Literal["getNodeInfo"], keepalive: bool = True,
     *, key: NodeKey
 ) -> Tuple[NodeAddr, Any]: ...
 @overload  # noqa
-def doRequest(
+async def doRequest(
     endpoint: Literal["debug_remoteGetSelf"], keepalive: bool = True,
     *, key: NodeKey
 ) -> RemoteSelfInfo: ...
 @overload  # noqa
-def doRequest(
+async def doRequest(
     endpoint: Literal["debug_remoteGetPeers"], keepalive: bool = True,
     *, key: NodeKey
 ) -> List[NodeKey]: ...
 @overload  # noqa
-def doRequest(
+async def doRequest(
     endpoint: Literal["debug_remoteGetDHT"], keepalive: bool = True,
     *, key: NodeKey
 ) -> List[NodeKey]: ...
 
-def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
+async def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
     response = None
     request_body = {
         "request": endpoint,
@@ -114,8 +115,9 @@ def doRequest(endpoint: str, keepalive: bool = True, **params):  # noqa
     try:
         ygg = socket.socket(SOCKTYPE, socket.SOCK_STREAM)
         ygg.connect(SOCKADDR)
-        ygg.send(request)
-        raw = ygg.recv(1024**2)
+        reader, writer = await asyncio.open_connection(sock=ygg)
+        writer.write(request)
+        raw = await reader.read()
     except OSError as e:
         raise RequestFailed from e
     data: RawAPIResponse = json.loads(raw)
@@ -172,12 +174,12 @@ RESPONSE_POSTPROCESS: Dict[str, Callable[[dict], Any]] = {
 }
 
 
-def visit(key: NodeKey) -> Tuple[NodeSummary, Set[NodeKey]]:
+async def visit(key: NodeKey) -> Tuple[NodeSummary, Set[NodeKey]]:
     try:
-        addr, nodeinfo = doRequest("getNodeInfo", key=key)
-        details = doRequest("debug_remoteGetSelf", key=key)
-        peers = doRequest("debug_remoteGetPeers", key=key)
-        dht = doRequest("debug_remoteGetDHT", key=key)
+        addr, nodeinfo = await doRequest("getNodeInfo", key=key)
+        details = await doRequest("debug_remoteGetSelf", key=key)
+        peers = await doRequest("debug_remoteGetPeers", key=key)
+        dht = await doRequest("debug_remoteGetDHT", key=key)
         time_raw = dt.now(tz=tz.utc)
         time = time_raw.astimezone()
     except RequestFailed as e:
@@ -194,18 +196,18 @@ def visit(key: NodeKey) -> Tuple[NodeSummary, Set[NodeKey]]:
     return summary, node_seen
 
 
-def crawl() -> Dict[NodeKey, NodeSummary]:
+async def crawl() -> Dict[NodeKey, NodeSummary]:
     known: Set[NodeKey] = set()
     visited: Dict[NodeKey, NodeSummary] = {}
     queue: Queue[NodeKey] = Queue()
-    self_info = doRequest("getSelf")
+    self_info = await doRequest("getSelf")
     queue.put(self_info['key'])
     while not queue.empty():
         pubkey = queue.get()
         known.add(pubkey)
         if pubkey in visited:
             continue
-        node_summary, newly_known = visit(pubkey)
+        node_summary, newly_known = await visit(pubkey)
         visited[pubkey] = node_summary
         newly_known -= known
         for key in newly_known:
@@ -222,6 +224,6 @@ class MapEncoder(json.JSONEncoder):
         return super().default(o)
 
 
-network_map = crawl()
+network_map = asyncio.run(crawl())
 json.dump(network_map, sys.stdout, indent=2, cls=MapEncoder)
 sys.stdout.flush()
