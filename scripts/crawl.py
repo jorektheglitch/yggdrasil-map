@@ -235,6 +235,7 @@ if __name__ == "__main__":
         from asyncio import WindowsProactorEventLoopPolicy
         windows_policy = WindowsProactorEventLoopPolicy()
         asyncio.set_event_loop_policy(windows_policy)
-    network_map = asyncio.run(crawl())
+    loop = asyncio.get_event_loop()
+    network_map = loop.run_until_complete(crawl())
     json.dump(network_map, sys.stdout, indent=2, cls=MapEncoder)
     sys.stdout.flush()
