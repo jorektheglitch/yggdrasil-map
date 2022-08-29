@@ -107,11 +107,14 @@ async def doRequest(endpoint: str, **params):  # noqa
     request_repr = json.dumps(request_body)
     request = request_repr.encode("utf-8")
     try:
-        ygg = socket.socket(SOCKTYPE, socket.SOCK_STREAM)
-        ygg.connect(SOCKADDR)
-        reader, writer = await asyncio.open_connection(sock=ygg)
+        if SOCKTYPE == socket.AF_INET:
+            reader, writer = await asyncio.open_connection(*SOCKADDR)
+        else:
+            reader, writer = await asyncio.open_unix_connection(SOCKADDR)
         writer.write(request)
         raw = await reader.read()
+        writer.close()
+        await writer.wait_closed()
     except OSError as e:
         raise RequestFailed from e
     data: RawAPIResponse = json.loads(raw)
