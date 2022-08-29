@@ -168,11 +168,15 @@ RESPONSE_POSTPROCESS: Dict[str, Callable[[dict], Any]] = {
 
 
 async def visit(key: NodeKey) -> Tuple[NodeSummary, Set[NodeKey]]:
+    requests = [
+        doRequest("getNodeInfo", key=key),
+        doRequest("debug_remoteGetSelf", key=key),
+        doRequest("debug_remoteGetPeers", key=key),
+        doRequest("debug_remoteGetDHT", key=key)
+    ]
     try:
-        addr, nodeinfo = await doRequest("getNodeInfo", key=key)
-        details = await doRequest("debug_remoteGetSelf", key=key)
-        peers = await doRequest("debug_remoteGetPeers", key=key)
-        dht = await doRequest("debug_remoteGetDHT", key=key)
+        (addr, nodeinfo), details, peers, dht = await asyncio.gather(*requests)
+    except RequestFailed as e:
         time_raw = dt.now(tz=tz.utc)
         time = time_raw.astimezone()
         return {"time": time, "error": type(e).__name__}, []  # type: ignore
